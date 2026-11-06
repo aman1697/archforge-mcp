@@ -1,0 +1,257 @@
+export type Level = 'hld' | 'lld';
+export type DiagramType = 'flowchart' | 'sequenceDiagram' | 'classDiagram' | 'stateDiagram-v2' | 'erDiagram';
+
+export interface SectionDef {
+  id: string;
+  level: Level;
+  title: string;
+  kind: 'llm' | 'computed';
+  dependsOn?: string[];
+  /** diagram types that MUST appear, with an optional minimum count (default 1) */
+  diagrams?: { type: DiagramType; min?: number }[];
+  minChars?: number;
+  instruction: string;
+}
+
+export const STYLE_RULES: string[] = [
+  'You are a principal software architect writing a design document that a team will use to build this application from scratch.',
+  'Be specific to THIS application: name concrete components, tables, endpoints, services and technologies. No generic filler, no marketing language.',
+  'Ground sizing and technology decisions in the requirements and capacity numbers provided; quote the numbers you rely on (e.g. "design load ≈ 1,200 RPS").',
+  'Where information is missing, state an explicit assumption instead of silently inventing facts. Mark assumed defaults that matter.',
+  'For every significant technology decision give: the choice, 1–2 alternatives considered, why the choice wins for these requirements, and when you would revisit it.',
+  'Prefer tables for catalogs (components, endpoints, tables, risks). Keep prose tight.',
+  'Output ONLY the section body in Markdown. Do not output a top-level title, preamble, or closing remarks; the document adds the section heading. Use ### or deeper for sub-headings.',
+  'Diagrams must be fenced ```mermaid blocks, one diagram per block, and MUST be syntactically valid Mermaid:',
+  '  - Node IDs: letters, digits, underscore only (no spaces, hyphens or dots). Never use the bare word "end" as a node ID.',
+  '  - Any label containing parentheses, brackets, braces, slashes, colons, quotes, ampersands or commas MUST be wrapped in double quotes, e.g. A["API Gateway (Kong)"].',
+  '  - Use <br/> for line breaks in labels; no markdown, no backticks and no smart quotes inside diagrams.',
+  '  - flowchart: use "flowchart LR" or "flowchart TB"; group with  subgraph Name["Title"]  ...  end  blocks.',
+  '  - sequenceDiagram: declare participants first; every alt/opt/loop/par/critical block must be closed with "end".',
+  '  - erDiagram: relationships as  ENTITY1 ||--o{ ENTITY2 : "label" ; attribute types are ONE word (e.g. varchar, int, uuid, timestamp), never varchar(255).',
+  '  - classDiagram / stateDiagram-v2: balance all braces.',
+  'No placeholders such as TODO, TBD, lorem ipsum or "[insert …]". If something is genuinely undecidable, list it as an open question with a recommended default.',
+];
+
+export const SECTIONS: SectionDef[] = [
+  // ───────────────────────── HLD ─────────────────────────
+  {
+    id: 'hld.overview',
+    level: 'hld',
+    title: 'Overview, Goals & Scope',
+    kind: 'llm',
+    instruction:
+      'Write: (1) a crisp problem statement and product vision; (2) goals and explicit non-goals; (3) actors/personas and what each does; (4) scope for the first release vs later; (5) the key constraints taken from the requirements (scale, budget, team, compliance, cloud); (6) a short glossary of domain terms. Keep it under ~600 words.',
+  },
+  {
+    id: 'hld.requirements',
+    level: 'hld',
+    title: 'Requirements',
+    kind: 'llm',
+    dependsOn: ['hld.overview'],
+    instruction:
+      'Derive functional requirements grouped by capability, each with an ID (FR-1, FR-2, …) and a one-line testable statement; infer sensible requirements from the stated features and capabilities, marking inferred ones as "(inferred)". Then a non-functional requirements table (NFR-1…) with a MEASURABLE target for each: latency (p95), throughput, availability, durability, scalability, security, compliance, maintainability, observability — pull numbers from the requirements and capacity data. End with an out-of-scope list.',
+  },
+  {
+    id: 'hld.capacity',
+    level: 'hld',
+    title: 'Capacity Estimation',
+    kind: 'computed',
+    instruction: 'Computed deterministically by the server from the questionnaire answers.',
+  },
+  {
+    id: 'hld.architecture',
+    level: 'hld',
+    title: 'Architecture Overview & Style',
+    kind: 'llm',
+    dependsOn: ['hld.requirements', 'hld.capacity'],
+    diagrams: [{ type: 'flowchart', min: 2 }],
+    instruction:
+      'Decide and justify the architectural style (modular monolith vs microservices vs serverless vs hybrid) using team size, scale, budget and operational maturity — do not default to microservices without justification. Provide: (1) a system-context diagram (users, the system as one box, external systems/providers) as a flowchart; (2) a container/component diagram as a flowchart with subgraphs for client tier, edge, application tier, async/messaging tier, data tier and external services; (3) the layering and trust boundaries; (4) a one-paragraph walk-through of a typical request through the diagram.',
+  },
+  {
+    id: 'hld.components',
+    level: 'hld',
+    title: 'Components & Responsibilities',
+    kind: 'llm',
+    dependsOn: ['hld.architecture'],
+    instruction:
+      'A catalog table of every component in the architecture: name, responsibility, owned data, technology, stateless/stateful, scaling unit/trigger, and critical dependencies. Then describe inter-component communication (sync REST/gRPC vs async events) and why per interaction, the bounded contexts/module boundaries, and which components are build vs buy (managed service / SaaS) with reasons.',
+  },
+  {
+    id: 'hld.data',
+    level: 'hld',
+    title: 'Data Architecture',
+    kind: 'llm',
+    dependsOn: ['hld.architecture', 'hld.capacity'],
+    diagrams: [{ type: 'flowchart' }],
+    instruction:
+      'Select a datastore per data type (transactional, cache, search, object/blob, queue/stream, analytics) with the decision rationale tied to the capacity numbers. Cover partitioning/sharding keys, replication topology, consistency model per data domain (strong vs eventual), retention/archival/deletion (incl. privacy requests), backup strategy and data ownership across components. Include a data-flow diagram (flowchart) showing how data moves between stores, including async pipelines and analytics.',
+  },
+  {
+    id: 'hld.flows',
+    level: 'hld',
+    title: 'Key End-to-End Flows',
+    kind: 'llm',
+    dependsOn: ['hld.architecture', 'hld.components'],
+    diagrams: [{ type: 'sequenceDiagram', min: 3 }],
+    instruction:
+      'Pick the 3–5 most important user journeys for this application (e.g. sign-up/login, the core transaction, an async/notification flow) and give each a sequence diagram at component level, followed by 3–6 lines of narration covering failure paths and what is synchronous vs asynchronous.',
+  },
+  {
+    id: 'hld.cloud',
+    level: 'hld',
+    title: 'Cloud & Infrastructure',
+    kind: 'llm',
+    dependsOn: ['hld.components', 'hld.capacity'],
+    diagrams: [{ type: 'flowchart' }],
+    instruction:
+      'Map every component to concrete managed services of the chosen cloud. If the cloud is "undecided", briefly compare AWS, Azure and GCP for THIS workload and recommend one with reasons, then map to it. Cover network topology (VPC/VNet, subnets, AZs, ingress, WAF, CDN, private connectivity), compute sizing using the capacity numbers, environment strategy (dev/stage/prod), IaC tooling and account/project structure. Include a deployment diagram (flowchart with subgraphs for region, AZs, subnets). End with the main cost drivers, levers to reduce cost, and a sanity check against the stated budget — label any cost figures as rough estimates.',
+  },
+  {
+    id: 'hld.scale_resilience',
+    level: 'hld',
+    title: 'Scalability, Availability & Disaster Recovery',
+    kind: 'llm',
+    dependsOn: ['hld.architecture', 'hld.capacity', 'hld.cloud'],
+    instruction:
+      'Cover: scaling strategy per tier with autoscaling triggers and limits; caching layers and invalidation overview; back-pressure, rate limiting and load shedding; a failure-mode table (component fails → user impact → mitigation → detection); SLOs and error budgets derived from the availability target; backup/DR design meeting the stated RPO/RTO (or a stated assumption); a 12-month capacity growth plan with the points at which the architecture must change; and a load/chaos testing plan.',
+  },
+  {
+    id: 'hld.security',
+    level: 'hld',
+    title: 'Security & Compliance',
+    kind: 'llm',
+    dependsOn: ['hld.architecture', 'hld.data'],
+    instruction:
+      'Cover authentication and authorization model (consistent with the sign-in methods requested), secrets and key management, encryption in transit/at rest, network security, tenant isolation if applicable, data classification and PII handling, audit logging, and secure SDLC/supply-chain controls. Provide a lightweight threat model (STRIDE-style table: threat → affected component → mitigation) and a control mapping for each selected compliance regime (what controls are needed and where in the architecture they live). If payments are involved, state the PCI scope explicitly.',
+  },
+  {
+    id: 'hld.ops',
+    level: 'hld',
+    title: 'Observability, CI/CD & Operations',
+    kind: 'llm',
+    dependsOn: ['hld.architecture', 'hld.cloud'],
+    diagrams: [{ type: 'flowchart' }],
+    instruction:
+      'Cover logging, metrics and tracing stack; the dashboards and alerts that map to the SLOs; a CI/CD pipeline diagram (flowchart from commit to production incl. tests, security scans, migrations, approvals); release strategy (blue/green, canary, feature flags); environments and config management; runbooks and on-call model appropriate to the team size; and cost monitoring.',
+  },
+  {
+    id: 'hld.decisions',
+    level: 'hld',
+    title: 'Key Decisions, Risks & Open Questions',
+    kind: 'llm',
+    dependsOn: ['hld.architecture', 'hld.data', 'hld.cloud', 'hld.security'],
+    instruction:
+      'Produce: (1) an ADR-style decision table (decision, options considered, choice, rationale, consequences, revisit trigger) for the 6–10 most consequential decisions; (2) the top risks with likelihood, impact and mitigation; (3) open questions for stakeholders, each with a recommended default; (4) the list of assumptions that came from defaulted or inferred answers and what changes if they are wrong.',
+  },
+
+  // ───────────────────────── LLD ─────────────────────────
+  {
+    id: 'lld.structure',
+    level: 'lld',
+    title: 'Project Structure & Modules',
+    kind: 'llm',
+    dependsOn: ['hld.architecture', 'hld.components'],
+    instruction:
+      'Recommend the language(s) and framework(s) per component, consistent with the team skills and preferences given (justify any deviation). Provide the repository layout (mono-repo vs multi-repo) with a folder tree in a ```text block, module/package boundaries and the dependency rules between them (what may import what), layering conventions (controller → service → repository / ports & adapters), configuration management, shared libraries, naming conventions and code-quality tooling (lint, format, type-check).',
+  },
+  {
+    id: 'lld.data_model',
+    level: 'lld',
+    title: 'Data Model',
+    kind: 'llm',
+    dependsOn: ['hld.data', 'lld.structure'],
+    diagrams: [{ type: 'erDiagram' }],
+    minChars: 800,
+    instruction:
+      'Design the full relational (or document) model for the core domain. Provide an ER diagram, then for each core table: purpose, columns with types and constraints, primary/foreign keys, indexes with the query each serves, and partition/shard key if relevant. Include sample DDL for the 3–5 most important tables. Cover multi-tenancy mechanics (if applicable), audit/soft-delete fields, ID strategy (UUIDv7/ULID/bigserial) with rationale, migration tooling and strategy, and data lifecycle/archival.',
+  },
+  {
+    id: 'lld.api',
+    level: 'lld',
+    title: 'API Design',
+    kind: 'llm',
+    dependsOn: ['hld.components', 'lld.data_model'],
+    minChars: 800,
+    instruction:
+      'Define API conventions (REST/GraphQL/gRPC choice and why), versioning, authentication headers, pagination, filtering/sorting, idempotency keys, rate-limit headers and a standard error format (e.g. RFC 7807). Then endpoint tables per resource: method, path, auth/role, request body or params, success and error status codes. Give 2–3 complete request/response JSON examples for the core flows. Cover webhooks/events exposed to clients if any, and outline the OpenAPI spec organisation.',
+  },
+  {
+    id: 'lld.classes',
+    level: 'lld',
+    title: 'Domain Model & Class Design',
+    kind: 'llm',
+    dependsOn: ['lld.data_model', 'lld.structure'],
+    diagrams: [{ type: 'classDiagram' }],
+    instruction:
+      'Describe the core domain entities/aggregates, domain services, repositories and ports/adapters. Provide a class diagram for the 2–3 most important modules (include key attributes and method signatures). Name the design patterns used and why (e.g. strategy, factory, saga, outbox, circuit breaker). Give pseudo-code (≤ 40 lines each) for the 1–2 most complex business algorithms in this application.',
+  },
+  {
+    id: 'lld.sequences',
+    level: 'lld',
+    title: 'Detailed Sequence Diagrams',
+    kind: 'llm',
+    dependsOn: ['hld.flows', 'lld.api', 'lld.data_model'],
+    diagrams: [{ type: 'sequenceDiagram', min: 3 }],
+    instruction:
+      'For the 3–5 most critical operations, provide detailed service-level sequence diagrams that show real endpoint calls, cache lookups, database transactions, queue publishes, timeouts, retries and error branches (use alt/opt/loop blocks, each closed with "end"). Follow each diagram with a short table of timeout/retry/idempotency settings used.',
+  },
+  {
+    id: 'lld.state',
+    level: 'lld',
+    title: 'State Machines & Workflows',
+    kind: 'llm',
+    dependsOn: ['lld.data_model', 'lld.classes'],
+    diagrams: [{ type: 'stateDiagram-v2' }],
+    instruction:
+      'For each entity with a meaningful lifecycle (e.g. order, payment, subscription, booking, job) provide a state diagram and a transition table (from → to, trigger, guard, side effects). Describe multi-step workflows/sagas with their compensation steps and where the state is persisted. If the application has no stateful lifecycle, model the closest relevant one (e.g. user account or background job).',
+  },
+  {
+    id: 'lld.async',
+    level: 'lld',
+    title: 'Async Processing & Events',
+    kind: 'llm',
+    dependsOn: ['hld.architecture', 'lld.state'],
+    instruction:
+      'List queues/topics and the event catalog (event name, producer, consumers, payload fields, ordering key). Specify delivery guarantees, idempotent consumer design, retry/backoff and dead-letter policy, the outbox pattern where needed, scheduled jobs (cron) and the notification pipeline for the selected channels. If the application genuinely needs little async work, say so and explain what stays synchronous and why.',
+  },
+  {
+    id: 'lld.consistency',
+    level: 'lld',
+    title: 'Caching, Concurrency & Consistency',
+    kind: 'llm',
+    dependsOn: ['hld.data', 'lld.data_model', 'lld.api'],
+    instruction:
+      'Specify cache keys and namespaces, TTLs, invalidation rules and stampede protection; optimistic vs pessimistic locking per hot entity; transaction boundaries; the approach to distributed consistency (saga/outbox/two-phase avoidance); idempotency-key implementation; and the rate-limiter algorithm with concrete parameters (limits per user/IP/tenant) chosen from the capacity numbers.',
+  },
+  {
+    id: 'lld.security_errors',
+    level: 'lld',
+    title: 'Validation, Errors & Security Details',
+    kind: 'llm',
+    dependsOn: ['hld.security', 'lld.api'],
+    instruction:
+      'Provide: input-validation rules and where they are enforced; an error taxonomy table (code, HTTP status, meaning, retryable?); token/session design (type, lifetimes, refresh rotation, revocation); an RBAC matrix (roles × actions) as a table; secrets handling in code and CI; which fields are encrypted/hashed/tokenised and how; and the audit-log record schema.',
+  },
+  {
+    id: 'lld.delivery',
+    level: 'lld',
+    title: 'Testing, Environments & Deployment Details',
+    kind: 'llm',
+    dependsOn: ['hld.ops', 'lld.structure'],
+    instruction:
+      'Cover: the test pyramid with concrete targets, contract/integration test approach and test-data strategy; load-test scenarios using the design RPS and read/write mix; environment configuration matrix; CI pipeline stages with a skeleton config snippet; IaC module layout; database migration and rollback procedure; feature-flag usage; and definition of done for a production release.',
+  },
+  {
+    id: 'lld.build_plan',
+    level: 'lld',
+    title: 'Build Plan',
+    kind: 'llm',
+    dependsOn: ['hld.architecture', 'lld.structure', 'hld.decisions'],
+    instruction:
+      'Turn the design into an ordered build plan for the stated team size: milestones starting with a walking skeleton (CI/CD + one end-to-end slice + observability), then risk-first ordering. For each milestone: scope, deliverables, dependencies, acceptance criteria and rough effort in person-weeks. Identify the critical path, what to defer, and the first 10 concrete tickets to create on day one.',
+  },
+];
+
+export const SECTION_BY_ID: Record<string, SectionDef> = Object.fromEntries(SECTIONS.map((s) => [s.id, s]));
+export const sectionsFor = (level: Level | 'all'): SectionDef[] => (level === 'all' ? SECTIONS : SECTIONS.filter((s) => s.level === level));

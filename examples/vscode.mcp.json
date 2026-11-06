@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "archforge": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:\\path\\to\\archforge-mcp\\dist\\index.js"]
+    }
+  }
+}

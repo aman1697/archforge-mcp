@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "archforge": {
+      "command": "node",
+      "args": ["C:\\path\\to\\archforge-mcp\\dist\\index.js"],
+      "env": {
+        "ARCHFORGE_LLM_PROVIDER": "openai-compatible",
+        "ARCHFORGE_LLM_BASE_URL": "https://api.openai.com/v1",
+        "ARCHFORGE_LLM_MODEL": "<model name from your provider>",
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+      }
+    }
+  }
+}

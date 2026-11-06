@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "archforge": {
+      "command": "node",
+      "args": ["C:\\path\\to\\archforge-mcp\\dist\\index.js"],
+      "env": {
+        "ARCHFORGE_LLM_PROVIDER": "ollama",
+        "ARCHFORGE_LLM_MODEL": "qwen2.5:14b"
+      }
+    }
+  }
+}

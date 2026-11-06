@@ -1,0 +1,45 @@
+{
+  "name": "archforge-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that interviews you about an app idea and generates an end-to-end HLD + LLD (with Mermaid diagrams) for any MCP-capable IDE.",
+  "type": "module",
+  "bin": {
+    "archforge-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "docs",
+    "examples",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "test": "npm run build && node test/smoke.mjs",
+    "prepublishOnly": "npm run build",
+    "docs": "npm run build && node scripts/gen-docs.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "architecture",
+    "hld",
+    "lld",
+    "system-design"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
